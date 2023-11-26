@@ -56,7 +56,13 @@ def descomprimirHashtags(data, fi, ff, hashtags):
     tweets = []
     for tweet in data: 
         f_in = open(tweet, "rb")
-        f_out = bz2.decompress(f_in.read()).decode('utf-8')
+        try:
+            f_in = open(tweet, "rb")
+            f_out = bz2.decompress(f_in.read()).decode('utf-8')
+            f_in.close()
+        except:
+            print("Error al descomprimir",tweet)
+            continue
         f_in.close()
         lineas = f_out.strip().split('\n')
         if(fi is not None or ff is not None):
