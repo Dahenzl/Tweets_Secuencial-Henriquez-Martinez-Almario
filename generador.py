@@ -6,6 +6,14 @@ import time
 import sys
 import argparse
 from datetime import date
+import numpy as np  
+from mpi4py import MPI
+
+
+comm = MPI.COMM_WORLD
+size = comm.Get_size()
+rank = comm.Get_rank()
+
 
 def Parametros():
     parser = argparse.ArgumentParser(add_help=False)
@@ -38,34 +46,51 @@ def leerHashtags(path):
     h_in = open(path, "r")
     lineas = h_in.readlines()
     h_in.close()
-    lineas = [linea.strip() for linea in lineas]
-    for i in range(len(lineas)):
-        if(lineas[i][0] == "#"):
-            lineas[i] = lineas[i][1:]
-    return lineas
+    hashtags = set()  
+    for linea in lineas:
+        hashtag = linea.strip()
+        if hashtag.startswith("#"):
+            hashtag = hashtag[1:]
+        hashtag = hashtag.lower()  # Convertir a minúsculas
+        hashtags.add(hashtag)  
+    return list(hashtags)  
+
 
 def recorrer(path):
     tweets = []
     for carpeta, _, archivo in os.walk(path):
         for tweet in archivo:
-            ruta_tweet = os.path.join(carpeta, tweet)
-            tweets.append(ruta_tweet)
+            if not tweet.startswith('.DS_Store'):  # Skip .DS_Store files
+                ruta_tweet = os.path.join(carpeta, tweet)
+                tweets.append(ruta_tweet)
+
     return tweets
 
 def descomprimirHashtags(data, fi, ff, hashtags):
     tweets = []
     for tweet in data: 
-        f_in = open(tweet, "rb")
-        f_out = bz2.decompress(f_in.read()).decode('utf-8')
-        f_in.close()
-        lineas = f_out.strip().split('\n')
-        if(fi is not None or ff is not None):
-                tweet1 = json.loads(lineas[0])
-                fecha = tweet1.get("timestamp_ms")
-                fecha = int(fecha)
-                fecha = date.fromtimestamp(fecha/1000)
-                if(fi is not None and ff is not None):
-                    if(fecha >= fi and fecha <= ff): 
+            f_in = open(tweet, "rb")
+            f_out = bz2.decompress(f_in.read()).decode('utf-8')
+            f_in.close()
+            lineas = f_out.strip().split('\n')
+            if(fi is not None or ff is not None):
+                    tweet1 = json.loads(lineas[0])
+                    fecha = tweet1.get("timestamp_ms")
+                    fecha = int(fecha)
+                    fecha = date.fromtimestamp(fecha/1000)
+                    if(fi is not None and ff is not None):
+                        if(fecha >= fi and fecha <= ff): 
+                            for linea in lineas:
+                                tweet_json = json.loads(linea)
+                                list_hashtags_json = []
+                                if(tweet_json.get("entities") is not None):
+                                    hashtags_json = tweet_json.get("entities").get("hashtags")
+                                    for hashtag_json in hashtags_json:
+                                        hashtag_json = hashtag_json.get("text")
+                                        list_hashtags_json.append(hashtag_json)
+                                if any(hashtag in list_hashtags_json for hashtag in hashtags):
+                                    tweets.append(tweet_json)
+                    elif(fi is not None and fecha <= fi or ff is not None and fecha >= ff):
                         for linea in lineas:
                             tweet_json = json.loads(linea)
                             list_hashtags_json = []
@@ -76,28 +101,18 @@ def descomprimirHashtags(data, fi, ff, hashtags):
                                     list_hashtags_json.append(hashtag_json)
                             if any(hashtag in list_hashtags_json for hashtag in hashtags):
                                 tweets.append(tweet_json)
-                elif(fi is not None and fecha <= fi or ff is not None and fecha >= ff):
-                    for linea in lineas:
-                        tweet_json = json.loads(linea)
-                        list_hashtags_json = []
-                        if(tweet_json.get("entities") is not None):
-                            hashtags_json = tweet_json.get("entities").get("hashtags")
-                            for hashtag_json in hashtags_json:
-                                hashtag_json = hashtag_json.get("text")
-                                list_hashtags_json.append(hashtag_json)
-                        if any(hashtag in list_hashtags_json for hashtag in hashtags):
-                            tweets.append(tweet_json)
-        else:
-            for linea in lineas:
-                tweet_json = json.loads(linea)
-                list_hashtags_json = []
-                if(tweet_json.get("entities") is not None):
-                    hashtags_json = tweet_json.get("entities").get("hashtags")
-                    for hashtag_json in hashtags_json:
-                        hashtag_json = hashtag_json.get("text")
-                        list_hashtags_json.append(hashtag_json)
-                if any(hashtag in list_hashtags_json for hashtag in hashtags):
-                    tweets.append(tweet_json)
+            
+            else:
+                for linea in lineas:
+                    tweet_json = json.loads(linea)
+                    list_hashtags_json = []
+                    if(tweet_json.get("entities") is not None):
+                        hashtags_json = tweet_json.get("entities").get("hashtags")
+                        for hashtag_json in hashtags_json:
+                            hashtag_json = hashtag_json.get("text")
+                            list_hashtags_json.append(hashtag_json)
+                    if any(hashtag in list_hashtags_json for hashtag in hashtags):
+                        tweets.append(tweet_json)
     return tweets
 
 def descomprimir(data, fi, ff):
@@ -140,7 +155,7 @@ def grafoRt(data):
             retweets.append((user, rt_user))
     G.add_nodes_from(personas)
     G.add_edges_from(retweets)
-    nx.write_gexf(G, "rt.gexf")
+    nx.write_gexf(G, "rtp.gexf") #rtp.gext
 
 def jsonRt(data):
     ReTweets = {}
@@ -170,7 +185,7 @@ def jsonRt(data):
                 Tweet["tweets"][f"tweetID: {tweetID}"] = {}
                 Tweet["tweets"][f"tweetID: {tweetID}"]["retweeted by"] = ReTweets[rt_user][tweetID]
         jsonList["retweets"].append(Tweet)
-    with open("rt.json", "w") as f:
+    with open("rtp.json", "w") as f: #rtp.json
         json.dump(jsonList, f, indent=4)
     return ReTweets
                     
@@ -192,7 +207,7 @@ def grafoMenciones(data):
                             mentions.append((user, men_user))
     G.add_nodes_from(personas)
     G.add_edges_from(mentions)
-    nx.write_gexf(G, "mención.gexf")
+    nx.write_gexf(G, "menciónp.gexf") #mecionp.gexf
      
 def jsonMenciones(data):
     Menciones = {}
@@ -229,7 +244,7 @@ def jsonMenciones(data):
                 mencion["tweets"] = Menciones[men_user][user]
                 mention["mentions"].append(mencion)
         mencionList["mentions"].append(mention)
-    with open("mención.json", "w") as f:
+    with open("menciónp.json", "w") as f: #mencionp.json
         json.dump(mencionList, f, indent=4)
     return Menciones
     
@@ -255,7 +270,7 @@ def grafoCoRt(data):
             personas.append(rt_user[len(rt_user)-1])           
     G.add_nodes_from(personas)
     G.add_edges_from(coretweets)
-    nx.write_gexf(G, "corrtw.gexf")
+    nx.write_gexf(G, "corrtwp.gexf") #corrtwp.gexf
     
 def jsonCoRt(data):
     co_retweets = {}
@@ -292,18 +307,20 @@ def jsonCoRt(data):
         coretweet["totalCoretweets"] = co_retweets2[coRt]["count"]
         coretweet["retweeters"] = co_retweets2[coRt]["users"]
         co_retweetsList["coretweets"].append(coretweet)
-    with open("corrtw.json", "w") as f:
+    with open("corrtwp.json", "w") as f: #corrtwp.json
         json.dump(co_retweetsList, f, indent=4)
     return co_retweets2
        
 def main(argv): 
     ti = time.time()
+    
     args = Parametros()
     fi, ff = TransformarFechas(args.fi, args.ff)
+    tweets_por_rango = recorrer(args.d)
     if (args.h is not None):
-        data = descomprimirHashtags(recorrer(args.d), fi, ff, leerHashtags(args.h))
+        data = descomprimirHashtags(tweets_por_rango, fi, ff, leerHashtags(args.h))
     else:
-        data = descomprimir(recorrer(args.d), fi, ff)
+        data = descomprimir(tweets_por_rango, fi, ff)
     if(args.grt):
         grafoRt(data)
     if(args.jrt):
@@ -316,8 +333,16 @@ def main(argv):
         grafoCoRt(data)
     if(args.jcrt):
         jsonCoRt(data)
+
+    all_data = comm.gather(data, root=0)
+
+    if rank == 0:
+        combined_data = []
+        for dataset in all_data:
+            combined_data.extend(dataset)     
     tf = time.time()
     print(tf - ti)
     
 if __name__ == "__main__":
     main(sys.argv[1:])
+
