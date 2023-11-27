@@ -44,15 +44,41 @@ def split_data(data, size):
 
 def TransformarFechas(fi, ff):
     if(fi is not None):
-        fi = fi.split("-")
-        fi = date(int(fi[2]), int(fi[1]), int(fi[0]))
+        partes_fi = fi.split("-")
+        
+        if len(partes_fi) >= 3:
+            dia = int(partes_fi[0])
+            mes = int(partes_fi[1])
+            anio = int(partes_fi[2])
+            
+            if anio < 100:
+                anio += 2000
+            
+            fi = date(anio, mes, dia)
+    
     if(ff is not None):
-        ff = ff.split("-")
-        ff = date(int(ff[2]), int(ff[1]), int(ff[0]))
+        # Dividir la fecha en componentes
+        partes_ff = ff.split("-")
+        
+        # Asegurarse de que haya al menos tres partes (día, mes y año)
+        if len(partes_ff) >= 3:
+            # Obtener los componentes de la fecha
+            dia = int(partes_ff[0])
+            mes = int(partes_ff[1])
+            anio = int(partes_ff[2])
+            
+            # Si el año tiene solo dos dígitos, asumir que pertenece al siglo 20
+            if anio < 100:
+                anio += 2000
+            
+            # Crear un objeto de fecha
+            ff = date(anio, mes, dia)
+    
     if(fi is not None and ff is not None and fi > ff):
         print("Fecha inicial mayor que fecha final")
         sys.exit()
     return fi, ff
+
 
 def leerHashtags(path):
     h_in = open(path, "r")
