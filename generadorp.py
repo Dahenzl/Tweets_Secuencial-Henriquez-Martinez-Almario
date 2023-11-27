@@ -123,7 +123,7 @@ def descomprimirHashtags(data, fi, ff, hashtags):
                                 hashtags_json = tweet_json.get("entities").get("hashtags")
                                 for hashtag_json in hashtags_json:
                                     hashtag_json = hashtag_json.get("text")
-                                    list_hashtags_json.append(hashtag_json)
+                                    list_hashtags_json.append(hashtag_json.lower())
                             if any(hashtag in list_hashtags_json for hashtag in hashtags):
                                 tweets.append(tweet_json)
                 elif(fi is not None and fecha <= fi or ff is not None and fecha >= ff):
@@ -134,7 +134,7 @@ def descomprimirHashtags(data, fi, ff, hashtags):
                             hashtags_json = tweet_json.get("entities").get("hashtags")
                             for hashtag_json in hashtags_json:
                                 hashtag_json = hashtag_json.get("text")
-                                list_hashtags_json.append(hashtag_json)
+                                list_hashtags_json.append(hashtag_json.lower())
                         if any(hashtag in list_hashtags_json for hashtag in hashtags):
                             tweets.append(tweet_json)
         else:
@@ -145,7 +145,7 @@ def descomprimirHashtags(data, fi, ff, hashtags):
                     hashtags_json = tweet_json.get("entities").get("hashtags")
                     for hashtag_json in hashtags_json:
                         hashtag_json = hashtag_json.get("text")
-                        list_hashtags_json.append(hashtag_json)
+                        list_hashtags_json.append(hashtag_json.lower())
                 if any(hashtag in list_hashtags_json for hashtag in hashtags):
                     tweets.append(tweet_json)
     all_tweets = comm.gather(tweets, root=0)
@@ -414,4 +414,6 @@ def main(argv):
 
 if __name__ == "__main__":
     main(sys.argv[1:])
+
+
 
