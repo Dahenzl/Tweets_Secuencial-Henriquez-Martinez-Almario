@@ -367,5 +367,6 @@ def main(argv):
     tf = time.time()
     print(f"Tiempo de ejecución del proceso {rank}: {tf - ti} segundos")
 
+    
 if __name__ == "__main__":
     main(sys.argv[1:])
