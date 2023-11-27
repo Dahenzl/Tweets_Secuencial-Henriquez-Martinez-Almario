@@ -364,22 +364,20 @@ def main(argv):
     args = Parametros()
     fi, ff = TransformarFechas(args.fi, args.ff)
 
+    # Procesar los datos
     if args.h is not None:
         data = descomprimirHashtags(recorrer(args.d), fi, ff, leerHashtags(args.h))
     else:
         data = descomprimir(recorrer(args.d), fi, ff)
 
+    # Recolectar todos los datos en el proceso raíz
     all_data = comm.gather(data, root=0)
 
     if rank == 0:
         combined_data = [tweet for sublist in all_data for tweet in sublist]
 
-        # Envío de datos a cada proceso responsable de una tarea
-        for r in range(1, size):
-            comm.send(combined_data, dest=r)
-
-        # Ejecución de tareas en el proceso raíz si hay menos de 6 procesos
-        if size < 6:
+        # Si hay menos de 6 procesos, el proceso raíz realiza todas las tareas
+        if size <= 6:
             if args.grt:
                 grafoRt(combined_data)
             if args.jrt:
@@ -392,13 +390,12 @@ def main(argv):
                 grafoCoRt(combined_data)
             if args.jcrt:
                 jsonCoRt(combined_data)
+        else:
+            for r in range(1, 7):
+                comm.send(combined_data, dest=r)
     else:
-        # Recepción de datos solo si el proceso está asignado para una tarea
-        if (rank == 1 and args.grt) or (rank == 2 and args.jrt) or \
-           (rank == 3 and args.gm) or (rank == 4 and args.jm) or \
-           (rank == 5 and args.gcrt) or (rank == 6 and args.jcrt):
+        if rank < 7:
             combined_data = comm.recv(source=0)
-
             if rank == 1 and args.grt:
                 grafoRt(combined_data)
             elif rank == 2 and args.jrt:
@@ -417,3 +414,4 @@ def main(argv):
 
 if __name__ == "__main__":
     main(sys.argv[1:])
+
