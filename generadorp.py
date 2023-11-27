@@ -6,7 +6,6 @@ import time
 import sys
 import argparse
 from datetime import date
-import numpy as np  
 from mpi4py import MPI
 
 
@@ -28,6 +27,20 @@ def Parametros():
     parser.add_argument("-jcrt", "--jcrt", action='store_true', help="Generar json de coretweets")
     
     return parser.parse_args()     
+
+def split_data(data, size):
+    length = len(data)
+    chunk_size = length // size
+    remainder = length % size
+
+    data_split = []
+    start = 0
+    for i in range(size):
+        end = start + chunk_size + (1 if i < remainder else 0)
+        data_split.append(data[start:end])
+        start = end
+
+    return data_split
 
 def TransformarFechas(fi, ff):
     if(fi is not None):
@@ -65,7 +78,7 @@ def recorrer(path):
     return tweets
 
 def descomprimirHashtags(data, fi, ff, hashtags):
-    data_split = np.array_split(data, size)
+    data_split = split_data(data, size)
     data_subconjunto = comm.scatter(data_split, root=0)
     tweets = []
     for tweet in data_subconjunto: 
@@ -121,7 +134,7 @@ def descomprimirHashtags(data, fi, ff, hashtags):
 
 
 def descomprimir(data, fi, ff):
-    data_split = np.array_split(data, size)
+    data_split = split_data(data, size)
     data_subconjunto = comm.scatter(data_split, root=0)
     tweets = []
     for tweet in data_subconjunto: 
