@@ -57,21 +57,16 @@ def TransformarFechas(fi, ff):
             fi = date(anio, mes, dia)
     
     if(ff is not None):
-        # Dividir la fecha en componentes
         partes_ff = ff.split("-")
         
-        # Asegurarse de que haya al menos tres partes (día, mes y año)
         if len(partes_ff) >= 3:
-            # Obtener los componentes de la fecha
             dia = int(partes_ff[0])
             mes = int(partes_ff[1])
             anio = int(partes_ff[2])
             
-            # Si el año tiene solo dos dígitos, asumir que pertenece al siglo 20
             if anio < 100:
                 anio += 2000
             
-            # Crear un objeto de fecha
             ff = date(anio, mes, dia)
     
     if(fi is not None and ff is not None and fi > ff):
@@ -100,18 +95,16 @@ def recorrer(path):
             if not archivo.startswith('.DS_Store'):
                 ruta_tweet = os.path.join(carpeta, archivo)
                 tweets.append(ruta_tweet)
-
+    
     data_split = split_data(tweets, size)
-
     tweets_subconjunto = comm.scatter(data_split, root=0)
     return tweets_subconjunto
 
 
+
 def descomprimirHashtags(data, fi, ff, hashtags):
-    data_split = split_data(data, size)
-    data_subconjunto = comm.scatter(data_split, root=0)
     tweets = []
-    for tweet in data_subconjunto: 
+    for tweet in data: 
         f_in = open(tweet, "rb")
         f_out = bz2.decompress(f_in.read()).decode('utf-8')
         f_in.close()
@@ -164,10 +157,8 @@ def descomprimirHashtags(data, fi, ff, hashtags):
 
 
 def descomprimir(data, fi, ff):
-    data_split = split_data(data, size)
-    data_subconjunto = comm.scatter(data_split, root=0)
     tweets = []
-    for tweet in data_subconjunto: 
+    for tweet in data: 
         f_in = open(tweet, "rb")
         f_out = bz2.decompress(f_in.read()).decode('utf-8')
         f_in.close()
@@ -372,27 +363,57 @@ def main(argv):
     ti = time.time()
     args = Parametros()
     fi, ff = TransformarFechas(args.fi, args.ff)
-    if (args.h is not None):
+
+    if args.h is not None:
         data = descomprimirHashtags(recorrer(args.d), fi, ff, leerHashtags(args.h))
     else:
         data = descomprimir(recorrer(args.d), fi, ff)
-    if (rank==0):
-        if(args.grt):
-            grafoRt(data)
-        if(args.jrt):
-            jsonRt(data)
-        if(args.gm):
-            grafoMenciones(data)
-        if(args.jm):
-            jsonMenciones(data)
-        if(args.gcrt):
-            grafoCoRt(data)
-        if(args.jcrt):
-            jsonCoRt(data)
-    
-    tf = time.time()
-    print(f"Tiempo de ejecución del proceso {rank}: {tf - ti} segundos")
 
-    
+    all_data = comm.gather(data, root=0)
+
+    if rank == 0:
+        combined_data = [tweet for sublist in all_data for tweet in sublist]
+
+        # Envío de datos a cada proceso responsable de una tarea
+        for r in range(1, size):
+            comm.send(combined_data, dest=r)
+
+        # Ejecución de tareas en el proceso raíz si hay menos de 6 procesos
+        if size < 6:
+            if args.grt:
+                grafoRt(combined_data)
+            if args.jrt:
+                jsonRt(combined_data)
+            if args.gm:
+                grafoMenciones(combined_data)
+            if args.jm:
+                jsonMenciones(combined_data)
+            if args.gcrt:
+                grafoCoRt(combined_data)
+            if args.jcrt:
+                jsonCoRt(combined_data)
+    else:
+        # Recepción de datos solo si el proceso está asignado para una tarea
+        if (rank == 1 and args.grt) or (rank == 2 and args.jrt) or \
+           (rank == 3 and args.gm) or (rank == 4 and args.jm) or \
+           (rank == 5 and args.gcrt) or (rank == 6 and args.jcrt):
+            combined_data = comm.recv(source=0)
+
+            if rank == 1 and args.grt:
+                grafoRt(combined_data)
+            elif rank == 2 and args.jrt:
+                jsonRt(combined_data)
+            elif rank == 3 and args.gm:
+                grafoMenciones(combined_data)
+            elif rank == 4 and args.jm:
+                jsonMenciones(combined_data)
+            elif rank == 5 and args.gcrt:
+                grafoCoRt(combined_data)
+            elif rank == 6 and args.jcrt:
+                jsonCoRt(combined_data)
+
+    tf = time.time()
+    print(f"Tiempo de proceso {rank}: {tf - ti} segundos")
+
 if __name__ == "__main__":
     main(sys.argv[1:])
