@@ -6,6 +6,13 @@ import time
 import sys
 import argparse
 from datetime import date
+import numpy as np  
+from mpi4py import MPI
+
+
+comm = MPI.COMM_WORLD
+size = comm.Get_size()
+rank = comm.Get_rank()
 
 def Parametros():
     parser = argparse.ArgumentParser(add_help=False)
@@ -38,31 +45,32 @@ def leerHashtags(path):
     h_in = open(path, "r")
     lineas = h_in.readlines()
     h_in.close()
-    lineas = [linea.strip() for linea in lineas]
-    for i in range(len(lineas)):
-        if(lineas[i][0] == "#"):
-            lineas[i] = lineas[i][1:]
-    return lineas
+    hashtags = set()  
+    for linea in lineas:
+        hashtag = linea.strip()
+        if hashtag.startswith("#"):
+            hashtag = hashtag[1:]
+        hashtag = hashtag.lower()  # Convertir a minúsculas
+        hashtags.add(hashtag)  
+    return list(hashtags) 
 
 def recorrer(path):
     tweets = []
     for carpeta, _, archivo in os.walk(path):
         for tweet in archivo:
-            ruta_tweet = os.path.join(carpeta, tweet)
-            tweets.append(ruta_tweet)
+            if not tweet.startswith('.DS_Store'):  # Skip .DS_Store files
+                ruta_tweet = os.path.join(carpeta, tweet)
+                tweets.append(ruta_tweet)
+
     return tweets
 
 def descomprimirHashtags(data, fi, ff, hashtags):
+    data_split = np.array_split(data, size)
+    data_subconjunto = comm.scatter(data_split, root=0)
     tweets = []
-    for tweet in data: 
+    for tweet in data_subconjunto: 
         f_in = open(tweet, "rb")
-        try:
-            f_in = open(tweet, "rb")
-            f_out = bz2.decompress(f_in.read()).decode('utf-8')
-            f_in.close()
-        except:
-            print("Error al descomprimir",tweet)
-            continue
+        f_out = bz2.decompress(f_in.read()).decode('utf-8')
         f_in.close()
         lineas = f_out.strip().split('\n')
         if(fi is not None or ff is not None):
@@ -104,11 +112,19 @@ def descomprimirHashtags(data, fi, ff, hashtags):
                         list_hashtags_json.append(hashtag_json)
                 if any(hashtag in list_hashtags_json for hashtag in hashtags):
                     tweets.append(tweet_json)
-    return tweets
+    all_tweets = comm.gather(tweets, root=0)
+    if rank == 0:
+        tweets_combinados = [tweet for sublist in all_tweets for tweet in sublist]
+        return tweets_combinados
+    else:
+        return []
+
 
 def descomprimir(data, fi, ff):
+    data_split = np.array_split(data, size)
+    data_subconjunto = comm.scatter(data_split, root=0)
     tweets = []
-    for tweet in data: 
+    for tweet in data_subconjunto: 
         f_in = open(tweet, "rb")
         f_out = bz2.decompress(f_in.read()).decode('utf-8')
         f_in.close()
@@ -131,7 +147,14 @@ def descomprimir(data, fi, ff):
             for linea in lineas:
                 tweet_json = json.loads(linea)               
                 tweets.append(tweet_json)
-    return tweets
+    
+    all_tweets = comm.gather(tweets, root=0)
+    if rank == 0:
+        tweets_combinados = [tweet for sublist in all_tweets for tweet in sublist]
+        return tweets_combinados
+    else:
+        return []
+
 
 def grafoRt(data):
     G = nx.DiGraph()
@@ -310,20 +333,23 @@ def main(argv):
         data = descomprimirHashtags(recorrer(args.d), fi, ff, leerHashtags(args.h))
     else:
         data = descomprimir(recorrer(args.d), fi, ff)
-    if(args.grt):
-        grafoRt(data)
-    if(args.jrt):
-        jsonRt(data)
-    if(args.gm):
-        grafoMenciones(data)
-    if(args.jm):
-        jsonMenciones(data)
-    if(args.gcrt):
-        grafoCoRt(data)
-    if(args.jcrt):
-        jsonCoRt(data)
+    if (rank==0):
+        if(args.grt):
+            grafoRt(data)
+        if(args.jrt):
+            jsonRt(data)
+        if(args.gm):
+            grafoMenciones(data)
+        if(args.jm):
+            jsonMenciones(data)
+        if(args.gcrt):
+            grafoCoRt(data)
+        if(args.jcrt):
+            jsonCoRt(data)
+    
     tf = time.time()
-    print(tf - ti)
+    if rank == 0:
+        print(tf - ti)
     
 if __name__ == "__main__":
     main(sys.argv[1:])
