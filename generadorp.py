@@ -69,13 +69,17 @@ def leerHashtags(path):
 
 def recorrer(path):
     tweets = []
-    for carpeta, _, archivo in os.walk(path):
-        for tweet in archivo:
-            if not tweet.startswith('.DS_Store'):  # Skip .DS_Store files
-                ruta_tweet = os.path.join(carpeta, tweet)
+    for carpeta, _, archivos in os.walk(path):
+        for archivo in archivos:
+            if not archivo.startswith('.DS_Store'):
+                ruta_tweet = os.path.join(carpeta, archivo)
                 tweets.append(ruta_tweet)
 
-    return tweets
+    data_split = split_data(tweets, size)
+
+    tweets_subconjunto = comm.scatter(data_split, root=0)
+    return tweets_subconjunto
+
 
 def descomprimirHashtags(data, fi, ff, hashtags):
     data_split = split_data(data, size)
@@ -182,7 +186,7 @@ def grafoRt(data):
             retweets.append((user, rt_user))
     G.add_nodes_from(personas)
     G.add_edges_from(retweets)
-    nx.write_gexf(G, "rt.gexf")
+    nx.write_gexf(G, "rtp.gexf")
 
 def jsonRt(data):
     ReTweets = {}
@@ -212,7 +216,7 @@ def jsonRt(data):
                 Tweet["tweets"][f"tweetID: {tweetID}"] = {}
                 Tweet["tweets"][f"tweetID: {tweetID}"]["retweeted by"] = ReTweets[rt_user][tweetID]
         jsonList["retweets"].append(Tweet)
-    with open("rt.json", "w") as f:
+    with open("rtp.json", "w") as f:
         json.dump(jsonList, f, indent=4)
     return ReTweets
                     
@@ -234,7 +238,7 @@ def grafoMenciones(data):
                             mentions.append((user, men_user))
     G.add_nodes_from(personas)
     G.add_edges_from(mentions)
-    nx.write_gexf(G, "mención.gexf")
+    nx.write_gexf(G, "menciónp.gexf")
      
 def jsonMenciones(data):
     Menciones = {}
@@ -271,7 +275,7 @@ def jsonMenciones(data):
                 mencion["tweets"] = Menciones[men_user][user]
                 mention["mentions"].append(mencion)
         mencionList["mentions"].append(mention)
-    with open("mención.json", "w") as f:
+    with open("menciónp.json", "w") as f:
         json.dump(mencionList, f, indent=4)
     return Menciones
     
@@ -297,7 +301,7 @@ def grafoCoRt(data):
             personas.append(rt_user[len(rt_user)-1])           
     G.add_nodes_from(personas)
     G.add_edges_from(coretweets)
-    nx.write_gexf(G, "corrtw.gexf")
+    nx.write_gexf(G, "corrtwp.gexf")
     
 def jsonCoRt(data):
     co_retweets = {}
@@ -361,8 +365,7 @@ def main(argv):
             jsonCoRt(data)
     
     tf = time.time()
-    if rank == 0:
-        print(tf - ti)
-    
+    print(f"Tiempo de ejecución del proceso {rank}: {tf - ti} segundos")
+
 if __name__ == "__main__":
     main(sys.argv[1:])
