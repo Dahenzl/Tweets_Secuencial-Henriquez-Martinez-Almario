@@ -1,4 +1,4 @@
-# Trabajo Analisis de Tweets Secuencial 
+# Trabajo Analisis de Tweets Paralelo
 El archivo se probo en la pagina de Play With Docker con la imagen proporcionada y todas las funcionalidades sirven correctamente.
 ## Notas importantes:
 - Para el parametro de directorio de datos -d se necesita pasar la dirección de la carpeta en donde se encuentran todos los archivos de datos, el formato de la carpeta y sus sub-carpetas no es relevante para el programa, siempre y cuando todos los archivos en esta sean **.json.bz2**.
